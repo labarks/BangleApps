@@ -10,9 +10,9 @@
     "tags": "tool,system,launcher",
     "supports": ["BANGLEJS","BANGLEJS2"],
     "storage": [
-      {"name":"launchclks.app.js","url":"app-b1.js","supports":["BANGLEJS"]},
-      {"name":"launchclks.app.js","url":"app-b2.js","supports":["BANGLEJS2"]},
-	  {"name":"clocks.info","url":"clocks.info"}
+      {"name":"launchclocks.app.js","url":"app-b1.js","supports":["BANGLEJS"]},
+      {"name":"launchclocks.app.js","url":"app-b2.js","supports":["BANGLEJS2"]},
+	  {"name":"clocks.info","url":"clocks.info"},
 	  {"name":"clocks.app.js","url":"clocks-b1.app.js","supports":["BANGLEJS"]},
       {"name":"clocks.app.js","url":"clocks-b2.app.js","supports":["BANGLEJS2"]},
 	  {"name":"clocks.img","url":"clocks-icon.js","evaluate":true}
