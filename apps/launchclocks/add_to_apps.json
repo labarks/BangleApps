@@ -4,7 +4,7 @@
     "name": "Launcher with Clocks sub-menu",
     "shortName": "Launcher w/ Clocks sub-menu",
     "version": "0.01",
-    "description": "This is a copy of the default Launcher with the Clocks seperated into a sub-menu. To use: install this app and uninstall the Launcher app.",
+    "description": "This is a copy of the default Launcher with the Clocks seperated into a sub-menu.\n To use: install this app and uninstall the Launcher app.",
     "icon": "app.png",
     "type": "launch",
     "tags": "tool,system,launcher",
@@ -12,6 +12,7 @@
     "storage": [
       {"name":"launchclks.app.js","url":"app-b1.js","supports":["BANGLEJS"]},
       {"name":"launchclks.app.js","url":"app-b2.js","supports":["BANGLEJS2"]},
+	  {"name":"clocks.info","url":"clocks.info"}
 	  {"name":"clocks.app.js","url":"clocks-b1.app.js","supports":["BANGLEJS"]},
       {"name":"clocks.app.js","url":"clocks-b2.app.js","supports":["BANGLEJS2"]},
 	  {"name":"clocks.img","url":"clocks-icon.js","evaluate":true}

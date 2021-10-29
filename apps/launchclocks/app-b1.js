@@ -5,10 +5,7 @@ var s = require("Storage");
 // Edit Start
 var apps = s.list(/\.info$/).map(app=>{var a=s.readJSON(app,1);return a&&{name:a.name,type:a.type,icon:a.icon,sortorder:a.sortorder,src:a.src};}).filter(app=>app && (app.type=="app" || !app.type));
 
-// Loads Clock app without clocks.info file
-if ( apps.indexOf({"name":"Clocks"}) === -1 ){
-	apps.push({"name":"Clocks","type":"app","icon":"clocks.img","sortorder":0,"src":"clocks.app.js"});
-}
+// Clock app loads from clocks.info file
 // Edit End
 
 apps.sort((a,b)=>{
