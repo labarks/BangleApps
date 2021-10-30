@@ -3,7 +3,7 @@
     "name": "Launcher with Clocks sub-menu",
     "shortName":"Launcher w/ Clocks sub-menu",
     "icon": "launchclocks.png",
-    "version":"0.01",
+    "version":"0.02",
     "type":"launch",
 	"src":"launchclocks.app.js",
 	"files":"launchclocks.info,launchclocks.app.js,launchclocks.png,clocks.info,clocks.app.js,clocks.img"
