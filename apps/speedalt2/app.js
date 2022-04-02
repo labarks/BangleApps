@@ -1,11 +1,13 @@
 /*
 Speed and Altitude [speedalt2]
 Mike Bennett mike[at]kereru.com
-0.01 : Initial
-0.06 : Add Posn screen
-0.07 : Add swipe to change screens same as BTN3
+1.10 : add inverted colours
+1.14 : Add VMG screen
+1.34 : Add bluetooth data stream for Droidscript
+1.43 : Keep GPS in SuperE mode while using Droiscript screen mirroring
 */
-var v = '1.05';
+var v = '1.49';
+var vDroid = '1.50';    // Required DroidScript program version
 
 /*kalmanjs, Wouter Bulten, MIT, https://github.com/wouterbulten/kalmanjs */
 var KalmanFilter = (function () {
@@ -173,27 +175,36 @@ var KalmanFilter = (function () {
 
 var buf = Graphics.createArrayBuffer(240,160,2,{msb:true});
 
-// Load fonts
-//require("Font7x11Numeric7Seg").add(Graphics);
+
+let LED = // LED as minimal and only definition (as instance / singleton)
+{ isOn: false // status on / off, not needed if you don't need to ask for it
+, set: function(v) { // turn on w/ no arg or truey, else off
+   this.isOn = v===undefined||!!v;
+   g.setColor(this.isOn?1:0,0,0).fillCircle(120,10,10); }
+, reset: function() { this.set(false); } // turn off
+, write: function(v) { this.set(v); }  // turn on w/ no arg or truey, else off
+, toggle: function() { this.set( ! this.isOn); } // toggle the LED
+}, LED1 = LED; // LED1 as 'synonym' for LED 
+
 
 var lf = {fix:0,satellites:0};
 var showMax = 0;        // 1 = display the max values. 0 = display the cur fix
 var pwrSav = 1;         // 1 = default power saving with watch screen off and GPS to PMOO mode. 0 = screen kept on.
 var canDraw = 1;
-var time = '';    // Last time string displayed. Re displayed in background colour to remove before drawing new time.
 var tmrLP;            // Timer for delay in switching to low power after screen turns off
 
-var max = {};
-max.spd = 0;
-max.alt = 0;
-max.n = 0;    // counter. Only start comparing for max after a certain number of fixes to allow kalman filter to have smoohed the data.
+var maxSpd = 0;
+var maxAlt = 0;
+var maxN = 0;    // counter. Only start comparing for max after a certain number of fixes to allow kalman filter to have smoohed the data.
 
 var emulator = (process.env.BOARD=="EMSCRIPTEN")?1:0;  // 1 = running in emulator. Supplies test values;
+var bt = 0;         // 0 = bluetooth data feed off. 1 = on
+var btLast = 0;     // time of last bt transmit
 
 var wp = {};        // Waypoint to use for distance from cur position.
 
-function nxtWp(inc){
-  cfg.wp+=inc;
+function nxtWp(){
+  cfg.wp++;
   loadWp();
 }
 
@@ -209,16 +220,27 @@ function radians(a) {
   return a*Math.PI/180;
 }
 
+function degrees(a) {
+  var d = a*180/Math.PI;
+  return (d+360)%360;
+}
+
+function bearing(a,b){
+  var delta = radians(b.lon-a.lon);
+  var alat = radians(a.lat);
+  var blat = radians(b.lat);
+  var y = Math.sin(delta) * Math.cos(blat);
+  var x = Math.cos(alat)*Math.sin(blat) -
+        Math.sin(alat)*Math.cos(blat)*Math.cos(delta);
+  return Math.round(degrees(Math.atan2(y, x)));
+}
+
 function distance(a,b){
   var x = radians(a.lon-b.lon) * Math.cos(radians((a.lat+b.lat)/2));
   var y = radians(b.lat-a.lat);
   
-  // Distance in selected units
+  // Distance in metres
   var d = Math.sqrt(x*x + y*y) * 6371000;
-  d = (d/parseFloat(cfg.dist)).toFixed(2);
-  if ( d >= 100 ) d = parseFloat(d).toFixed(1);
-  if ( d >= 1000 ) d = parseFloat(d).toFixed(0);
-
   return d;
 }
 
@@ -227,7 +249,8 @@ function drawScrn(dat) {
   if (!canDraw) return;
 
   buf.clear();
-
+  buf.setBgColor(0);
+  
   var n;
   n = dat.val.toString();
   
@@ -252,29 +275,21 @@ function drawScrn(dat) {
   buf.setFontVector(35);
   buf.drawString(dat.unit,5,164);  
   
-  if ( dat.max ) drawMax(); // MAX display indicator
-  if ( dat.wp ) drawWP();  // Waypoint name
-  
-  //Sats
-  if ( dat.sat ) {
-    if ( dat.age > 10 ) {
-      if ( dat.age > 90 ) dat.age = '>90';
-      drawSats('Age:'+dat.age);
-    }
-    else drawSats('Sats:'+dat.sats);
-  }
-  
+  drawMax(dat.max); // MAX display indicator
+  drawWP(dat.wp);  // Waypoint name
+  drawSats(dat.sats);
+   
   g.reset();
   g.drawImage(img,0,40);
   
-  if ( pwrSav ) LED1.reset();
-  else LED1.set();
+  LED1.write(!pwrSav);
 
 }
 
 function drawPosn(dat) {
   if (!canDraw) return;
   buf.clear();
+  buf.setBgColor(0);
 
   var x, y;
   x=210;
@@ -293,20 +308,12 @@ function drawPosn(dat) {
   buf.drawString(dat.ew,x,y+70);
 
 
-  //Sats
-  if ( dat.sat ) {
-    if ( dat.age > 10 ) {
-      if ( dat.age > 90 ) dat.age = '>90';
-      drawSats('Age:'+dat.age);
-    }
-    else drawSats('Sats:'+dat.sats);
-  }
+  drawSats(dat.sats);
 
   g.reset();
   g.drawImage(img,0,40);
 
-  if ( pwrSav ) LED1.reset();
-  else LED1.set();
+  LED1.write(!pwrSav);
 
 }
 
@@ -314,6 +321,8 @@ function drawClock() {
   if (!canDraw) return;
   
   buf.clear();
+  buf.setBgColor(0);
+  
   var x, y;
   x=185;
   y=0;
@@ -329,19 +338,14 @@ function drawClock() {
   g.reset();
   g.drawImage(img,0,40);
   
-  if ( pwrSav ) LED1.reset();
-  else LED1.set(); 
+  LED1.write(!pwrSav);
 }
 
-function drawWP() {
-  var nm = wp.name;
-  if ( nm == undefined || nm == 'NONE' || cfg.modeA ==1 ) nm = '';
-  buf.setColor(2);  
-
+function drawWP(wp) {
+  buf.setColor(3);  
   buf.setFontAlign(0,1); //left, bottom
-  buf.setFontVector(48);
-  buf.drawString(nm.substring(0,8),120,140);  
-
+  buf.setFontVector(40);
+  buf.drawString(wp,120,132);  
 }
 
 function drawSats(sats) {
@@ -351,16 +355,15 @@ function drawSats(sats) {
   buf.drawString(sats,240,160);  
 }
 
-function drawMax() {
+function drawMax(max) {
   buf.setFontVector(30);
   buf.setColor(2); 
   buf.setFontAlign(0,1); //centre, bottom
-  buf.drawString('MAX',120,164);
+  buf.drawString(max,120,164);
 }
 
 function onGPS(fix) {
-  
- if ( emulator ) {
+if ( emulator ) {
     fix.fix = 1;
     fix.speed = 10 + (Math.random()*5);
     fix.alt = 354 + (Math.random()*50);
@@ -375,17 +378,26 @@ function onGPS(fix) {
   var m;
 
   var sp = '---';        
-  var al = '---';
-  var di = '---';
-  var age = '---';
+  var al = sp;
+  var di = sp;
+  var brg = ''; // bearing
+  var crs = ''; // course
+  var age = sp;
   var lat = '---.--';
   var ns = '';
   var ew = '';
   var lon = '---.--';
+  var sats = sp;
+  var vmg = sp;
   
+  
+  // Waypoint name
+  var wpName = wp.name;
+  if ( wpName == undefined || wpName == 'NONE' ) wpName = '';
+  wpName = wpName.substring(0,8);  
 
   if (fix.fix) lf = fix;
-
+  
   if (lf.fix) {
 
     // Smooth data
@@ -393,33 +405,48 @@ function onGPS(fix) {
       if ( cfg.spdFilt ) lf.speed = spdFilter.filter(lf.speed);
       if ( cfg.altFilt ) lf.alt = altFilter.filter(lf.alt);
       lf.smoothed = 1;
-      if ( max.n <= 15 ) max.n++;
+      if ( maxN <= 15 ) maxN++;
     }
+    
+    // Bearing to waypoint
+    brg = bearing(lf,wp);
+    
+    // Current course
+    crs = lf.course;
 
+    // Relative angle to wp
+    var a = Math.max(crs,brg) - Math.min(crs,brg);
+    if ( a >= 180 ) a = 360 -a;
 
     // Speed
-    if ( cfg.spd == 0 ) {
-      m = require("locale").speed(lf.speed).match(/([0-9,\.]+)(.*)/); // regex splits numbers from units
-      sp = parseFloat(m[1]);
-      cfg.spd_unit = m[2];
-    }
-    else sp = parseFloat(lf.speed)/parseFloat(cfg.spd); // Calculate for selected units
+    sp = parseFloat(lf.speed)/parseFloat(cfg.spd); // Calculate for selected units
+
+    // vmg
+    if ( a >= 90 ) vmg = sp * Math.cos(radians(180-a)) * -1;  // moving away from WP
+    else vmg = sp * Math.cos(radians(a));  // towards wp
 
     if ( sp < 10 ) sp = sp.toFixed(1);
     else sp = Math.round(sp);
-    
-    if (parseFloat(sp) > parseFloat(max.spd) && max.n > 15 ) max.spd = sp;
+    if (isNaN(sp)) sp = '---';
+    if (parseFloat(sp) > parseFloat(maxSpd) && maxN > 15 ) maxSpd = sp;
+
+    if ( Math.abs(vmg) >= 0.05 && Math.abs(vmg) < 10 ) vmg = vmg.toFixed(1);
+    else vmg = Math.round(vmg);
+    if (isNaN(vmg)) vmg = '---';
 
     // Altitude
     al = lf.alt;
     al = Math.round(parseFloat(al)/parseFloat(cfg.alt));
-    
-    if (parseFloat(al) > parseFloat(max.alt) && max.n > 15 ) max.alt = al;
+    if (parseFloat(al) > parseFloat(maxAlt) && maxN > 15 ) maxAlt = al;
+    if (isNaN(al)) al = '---';
 
     // Distance to waypoint
     di = distance(lf,wp);
-    if (isNaN(di)) di = 0;
-
+    di = (di/parseFloat(cfg.dist)).toFixed(2);
+    if ( di >= 100 ) di = parseFloat(di).toFixed(1);
+    if ( di >= 1000 ) di = parseFloat(di).toFixed(0);
+    if (isNaN(di)) di = '------';
+    
     // Age of last fix (secs)
     age = Math.max(0,Math.round(getTime())-(lf.time.getTime()/1000));
 
@@ -431,55 +458,83 @@ function onGPS(fix) {
     ew = 'E';
     if ( lf.lon < 0 ) ew = 'W';
     lon = Math.abs(lf.lon.toFixed(2)); 
+    
+    // Sats
+    if ( age > 10 ) {
+      sats = 'Age:'+Math.round(age);
+      if ( age > 90 ) sats = 'Age:>90';
+    }
+    else sats = 'Sats:'+lf.satellites;
 
   }
 
+  // Bluetooth send data
+  btSend({
+    id:'speedalt2',
+    v:v,
+    vd:vDroid,
+    m:cfg.modeA,
+    spd_unit:cfg.spd_unit,
+    alt_unit:cfg.alt_unit,
+    dist_unit:cfg.dist_unit,
+    wp:wpName,
+    sp:sp,
+    al:al,
+    di:di,
+    sats:sats,
+    vmg:vmg,
+    lat:lat,
+    lon:lon,
+    ns:ns,
+    ew:ew
+  });
+
   if ( cfg.modeA == 0 )  {
     // Speed
-    if ( showMax ) 
+    if ( showMax ) {
       drawScrn({
-        val:max.spd,
+        val:maxSpd,
         unit:cfg.spd_unit,
-        sats:lf.satellites,
+        sats:sats,
         age:age,
-        max:true,
-        wp:false,
-        sat:true
+        max:'MAX',
+        wp:''
       }); // Speed maximums
-    else
+    }
+    else {
       drawScrn({
         val:sp,
         unit:cfg.spd_unit,
-        sats:lf.satellites,
+        sats:sats,
         age:age,
-        max:false,
-        wp:false,
-        sat:true
+        max:'SPD',
+        wp:''
       });
+    }
   }
 
   if ( cfg.modeA == 1 ) {
     // Alt
-    if ( showMax ) 
+    if ( showMax ) {
       drawScrn({
-        val:max.alt,
+        val:maxAlt,
         unit:cfg.alt_unit,
-        sats:lf.satellites,
+        sats:sats,
         age:age,
-        max:true,
-        wp:false,
-        sat:true
+        max:'MAX',
+        wp:''
       }); // Alt maximums
-    else 
+    }
+    else {
       drawScrn({
         val:al,
         unit:cfg.alt_unit,
-        sats:lf.satellites,
+        sats:sats,
         age:age,
-        max:false,
-        wp:false,
-        sat:true
+        max:'ALT',
+        wp:''
       });
+    }
   }
 
   if ( cfg.modeA == 2 ) {
@@ -487,28 +542,38 @@ function onGPS(fix) {
       drawScrn({
         val:di,
         unit:cfg.dist_unit,
-        sats:lf.satellites,
+        sats:sats,
         age:age,
-        max:false,
-        wp:true,
-        sat:true
+        max:'DST',
+        wp:wpName
       });
   }
 
   if ( cfg.modeA == 3 ) {
+    // VMG
+      drawScrn({
+        val:vmg,
+        unit:cfg.spd_unit,
+        sats:sats,
+        age:age,
+        max:'VMG',
+        wp:wpName
+      });
+  }
+
+  if ( cfg.modeA == 4 ) {
     // Position
-      drawPosn({
-        sats:lf.satellites,
+    drawPosn({
+        sats:sats,
         age:age,
         lat:lat,
         lon:lon,
         ns:ns,
-        ew:ew,
-        sat:true
+        ew:ew
       });
   }
   
-  if ( cfg.modeA == 4 )  {
+  if ( cfg.modeA == 5 )  {
     // Large clock
     drawClock();
   }
@@ -517,14 +582,14 @@ function onGPS(fix) {
 
 function prevScrn() {
     cfg.modeA = cfg.modeA-1;
-    if ( cfg.modeA < 0 ) cfg.modeA = 4;
+    if ( cfg.modeA < 0 ) cfg.modeA = 5;
     savSettings();
     onGPS(lf); 
 }
 
 function nextScrn() {
     cfg.modeA = cfg.modeA+1;
-    if ( cfg.modeA > 4 ) cfg.modeA = 0;
+    if ( cfg.modeA > 5 ) cfg.modeA = 0;
     savSettings();
     onGPS(lf); 
 }
@@ -534,18 +599,18 @@ function nextFunc(dur) {
     if ( cfg.modeA == 0 || cfg.modeA == 1 ) {
       // Spd+Alt mode - Switch between fix and MAX
       if ( dur < 2 ) showMax = !showMax;   // Short press toggle fix/max display
-      else { max.spd = 0; max.alt = 0; }  // Long press resets max values.
+      else { maxSpd = 0; maxAlt = 0; }  // Long press resets max values.
     }
-    else  if ( cfg.modeA == 2) nxtWp(1);  // Dist mode - Select next waypoint
+    else  if ( cfg.modeA == 2 || cfg.modeA == 3) nxtWp();  // Dist or VMG mode - Select next waypoint
     onGPS(lf);
 }
 
 
 function updateClock() {
   if (!canDraw) return;
-  if ( cfg.modeA != 4 )  return;
+  if ( cfg.modeA != 5 )  return;
   drawClock(); 
-  if ( emulator ) {max.spd++;max.alt++;}
+  if ( emulator ) {maxSpd++;maxAlt++;}
 }
 
 function startDraw(){
@@ -558,6 +623,7 @@ function startDraw(){
 
 function stopDraw() {
   canDraw=false;
+  if ( bt ) return;    // If bt screen mirror to Droidscript in use then keep GPS in SuperE mode to keep screen updates going.
   if (!tmrLP) tmrLP=setInterval(function () {if (lf.fix) setLpMode('PSMOO');}, 10000);   //Drop to low power in 10 secs. Keep lp mode off until we have a  first fix.
 }
 
@@ -569,6 +635,20 @@ function setLpMode(m) {
   if (tmrLP) {clearInterval(tmrLP);tmrLP = false;} // Stop any scheduled drop to low power
   if ( !gpssetup ) return;
   gpssetup.setPowerMode({power_mode:m});
+}
+
+// == Droidscript bluetooth data
+
+function btOn(b) {
+  bt = b;                                   // Turn data transmit on/off
+}
+
+function btSend(dat) {
+  if ( ! bt ) return;                       // bt transmit off
+  var dur = getTime() - btLast;
+  if ( dur < 1.0 ) return;                  // Don't need to transmit more than every 1.0 secs.
+  btLast = getTime();
+  Bluetooth.println(JSON.stringify(dat));         // transmit the data
 }
 
 // == Events
@@ -585,7 +665,6 @@ function setButtons(){
   setWatch(function(e){
     pwrSav=!pwrSav; 
     if ( pwrSav ) {
-      LED1.reset();
       var s = require('Storage').readJSON('setting.json',1)||{};
       var t = s.timeout||10;
       Bangle.setLCDTimeout(t);
@@ -593,25 +672,14 @@ function setButtons(){
     else {
       Bangle.setLCDTimeout(0);
 //      Bangle.setLCDPower(1);
-      LED1.set();
     }
+      LED1.write(!pwrSav);
   }, BTN2, {repeat:true,edge:"falling"});
   
   // BTN3 - next screen
   setWatch(function(e){
     nextScrn();
   }, BTN3, {repeat:true,edge:"falling"});
-  
-/* 
-  // Touch screen same as BTN1 short
-  setWatch(function(e){
-    nextFunc(1);  // Same as BTN1 short
-  }, BTN4, {repeat:true,edge:"falling"});
-  setWatch(function(e){
-    nextFunc(1);  // Same as BTN1 short
-  }, BTN5, {repeat:true,edge:"falling"});
-*/
-
 }
 
 Bangle.on('lcdPower',function(on) {
@@ -629,40 +697,22 @@ Bangle.on('swipe',function(dir) {
 Bangle.on('touch', function(button){
   if ( ! cfg.touch ) return;
   nextFunc(0);  // Same function as short BTN1
-/*  
-    switch(button){
-    case 1:    // BTN4
-console.log('BTN4');
-        prevScrn();
-      break;
-    case 2:    // BTN5
-console.log('BTN5');
-      nextScrn();
-      break;
-    case 3:
-console.log('MDL');
-      nextFunc(0);  // Centre - same function as short BTN1
-      break;
-    }
-*/
-  });
-
-
+});
 
 // == Main Prog
 
 // Read settings. 
 let cfg = require('Storage').readJSON('speedalt2.json',1)||{};
 
-cfg.spd = cfg.spd||0;  // Multiplier for speed unit conversions. 0 = use the locale values for speed
-cfg.spd_unit = cfg.spd_unit||'';  // Displayed speed unit
+cfg.spd = cfg.spd||1;  // Multiplier for speed unit conversions. 0 = use the locale values for speed
+cfg.spd_unit = cfg.spd_unit||'kph';  // Displayed speed unit
 cfg.alt = cfg.alt||0.3048;// Multiplier for altitude unit conversions.
 cfg.alt_unit = cfg.alt_unit||'feet';  // Displayed altitude units
 cfg.dist = cfg.dist||1000;// Multiplier for distnce unit conversions.
 cfg.dist_unit = cfg.dist_unit||'km';  // Displayed altitude units
 cfg.colour = cfg.colour||0;          // Colour scheme.
 cfg.wp = cfg.wp||0;        // Last selected waypoint for dist
-cfg.modeA = cfg.modeA||0;    // 0=Speed 1=Alt 2=Dist 3=Position 4=Clock 
+cfg.modeA = cfg.modeA||0;    // 0=Speed 1=Alt 2=Dist 3 = vmg 4=Position 5=Clock 
 cfg.primSpd = cfg.primSpd||0;    // 1 = Spd in primary, 0 = Spd in secondary
 
 cfg.spdFilt = cfg.spdFilt==undefined?true:cfg.spdFilt; 
@@ -690,7 +740,8 @@ var img = {
 };
 
 if ( cfg.colour == 1 ) img.palette = new Uint16Array([0,0xFFFF,0xFFF6,0xDFFF]);
-if ( cfg.colour == 2 ) img.palette = new Uint16Array([0,0xFF800,0xFAE0,0xF813]);
+if ( cfg.colour == 2 ) img.palette = new Uint16Array([0,0xF800,0xFAE0,0xF813]);
+if ( cfg.colour == 3 ) img.palette = new Uint16Array([0xFFFF,0x007F,0x0054,0x0054]);
 
 var SCREENACCESS = {
       withApp:true,

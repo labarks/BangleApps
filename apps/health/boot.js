@@ -1,18 +1,28 @@
 (function(){
-   var settings = require("Storage").readJSON("health.json",1)||{};
-   var hrm = 0|settings.hrm;
-   Bangle.setHRMPower(hrm!=0, "health");
-   if (hrm==1) {
-     function onHealth() {
-       Bangle.setHRMPower(1, "health");
-       setTimeout(()=>Bangle.setHRMPower(0, "health"),2*60000); // give it 2 minutes
+  var settings = require("Storage").readJSON("health.json",1)||{};
+  var hrm = 0|settings.hrm;
+  if (hrm == 1 || hrm == 2) {
+   function onHealth() {
+     Bangle.setHRMPower(1, "health");
+     setTimeout(()=>Bangle.setHRMPower(0, "health"),hrm*60000); // give it 1 minute detection time for 3 min setting and 2 minutes for 10 min setting
+     if (hrm == 1){
+       for (var i = 1; i <= 2; i++){
+         setTimeout(()=>{
+           Bangle.setHRMPower(1, "health");
+           setTimeout(()=>{
+             Bangle.setHRMPower(0, "health");
+           }, (i * 200000) + 60000);
+         }, (i * 200000));
+       }
      }
-     Bangle.on("health", onHealth);
-     Bangle.on('HRM', h => {
-       if (h.confidence>80) Bangle.setHRMPower(0, "health");
-     });
-     onHealth();
    }
+   Bangle.on("health", onHealth);
+   Bangle.on('HRM', h => {
+     if (h.confidence>80) Bangle.setHRMPower(0, "health");
+   });
+   if (Bangle.getHealthStatus().bpmConfidence) return;
+   onHealth();
+  } else Bangle.setHRMPower(hrm!=0, "health");
 })();
 
 Bangle.on("health", health => {
@@ -27,7 +37,7 @@ Bangle.on("health", health => {
   const DB_FILE_LEN = DB_HEADER_LEN + DB_RECORDS_PER_MONTH*DB_RECORD_LEN;
 
   function getRecordFN(d) {
-    return "health-"+d.getFullYear()+"-"+d.getMonth()+".raw";
+    return "health-"+d.getFullYear()+"-"+(d.getMonth()+1)+".raw";
   }
   function getRecordIdx(d) {
     return (DB_RECORDS_PER_DAY*(d.getDate()-1)) +
@@ -55,28 +65,30 @@ Bangle.on("health", health => {
   }
   var recordPos = DB_HEADER_LEN+(rec*DB_RECORD_LEN);
   require("Storage").write(fn, getRecordData(health), recordPos, DB_FILE_LEN);
-  if (rec%DB_RECORDS_PER_DAY != DB_RECORDS_PER_DAY-1) return;
+  if (rec%DB_RECORDS_PER_DAY != DB_RECORDS_PER_DAY-2) return;
   // we're at the end of the day. Read in all of the data for the day and sum it up
   var sumPos = recordPos + DB_RECORD_LEN; // record after the current one is the sum
   if (f.substr(sumPos, DB_RECORD_LEN)!="\xFF\xFF\xFF\xFF") {
     print("HEALTH ERR: Daily summary already written!");
     return;
   }
-  health = { steps:0, bpm:0, movement:0, records:0};
+  health = { steps:0, bpm:0, movement:0, movCnt:0, bpmCnt:0};
   var records = DB_RECORDS_PER_HR*24;
   for (var i=0;i<records;i++) {
     var dt = f.substr(recordPos, DB_RECORD_LEN);
     if (dt!="\xFF\xFF\xFF\xFF") {
-      health.records++;
-      health.steps += (dt.charCodeAt(1)<<8)+dt.charCodeAt(1);
-      health.bpm += dt.charCodeAt(2);
+      health.steps += (dt.charCodeAt(0)<<8)+dt.charCodeAt(1);
       health.movement += dt.charCodeAt(2);
+      health.movCnt++;
+      var bpm = dt.charCodeAt(2);
+      health.bpm += bpm;
+      if (bpm) health.bpmCnt++;
     }
     recordPos -= DB_RECORD_LEN;
   }
-  if (health.records) {
-    health.bpm /= health.records;
-    health.movement /= health.records;
-  }
+  if (health.bpmCnt)
+    health.bpm /= health.bpmCnt;
+  if (health.movCnt)
+    health.movement /= health.movCnt;
   require("Storage").write(fn, getRecordData(health), sumPos, DB_FILE_LEN);
 });

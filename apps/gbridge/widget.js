@@ -184,7 +184,7 @@
       case "call":
         var note = { size: 55, title: event.name, id: "call",
                      body: event.number, icon:require("heatshrink").decompress(atob("jEYwIMJj4CCwACJh4CCCIMOAQMGAQMHAQMDAQMBCIMB4PwgHz/EAn4CBj4CBg4CBgACCAAw="))}
-        if (event.cmd === "incoming") {
+        if (event.cmd === "incoming" || event.cmd === "") {
           require("notify").show(note);
           if (!(require('Storage').readJSON('setting.json',1)||{}).quiet) {
             Bangle.buzz();
@@ -256,18 +256,19 @@
   }
 
   function sendBattery() {
-    gbSend({ t: "status", bat: E.getBattery() });
+    gbSend({ t: "status", bat: E.getBattery(), chg: Bangle.isCharging()?1:0 });
   }
 
   // Send a summary of activity to Gadgetbridge
   function sendActivity(hrm) {
     var steps = currentSteps - lastSentSteps;
-    lastSentSteps = 0;
+    lastSentSteps = currentSteps;
     gbSend({ t: "act", stp: steps, hrm:hrm });
   }
 
   // Battery monitor
   NRF.on("connect", () => setTimeout(sendBattery, 2000));
+  Bangle.on("charging", sendBattery);
   setInterval(sendBattery, 10*60*1000);
   sendBattery();
   // Activity monitor
