@@ -48,7 +48,7 @@
   const unitsMenu = {
     '': {'title': 'Units'},
     '< Back': function() { E.showMenu(appMenu); },
-    'default (spd)' : function() { setUnits(0,''); },
+//    'default (spd)' : function() { setUnits(0,''); },
     'Kph (spd)' : function() { setUnits(1,'kph'); },
     'Knots (spd)' : function() { setUnits(1.852,'kts'); },
     'Mph (spd)' : function() { setUnits(1.60934,'mph'); },
@@ -65,7 +65,8 @@
     '< Back': function() { E.showMenu(appMenu); },
     'Default' : function() { setColour(0); },
     'Hi Contrast' : function() { setColour(1); },
-    'Night' : function() { setColour(2); }
+    'Night' : function() { setColour(2); },
+    'Inverted' : function() { setColour(3); }
   };
   
   const kalMenu = {

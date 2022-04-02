@@ -16,7 +16,6 @@ var DEVICE = process.argv[2];
 var path = require('path');
 var ROOTDIR = path.join(__dirname, '..');
 var APPDIR = ROOTDIR+'/apps';
-var APPJSON = ROOTDIR+'/apps.json';
 var MINIFY = true;
 var OUTFILE, APPS;
 
@@ -29,8 +28,8 @@ if (DEVICE=="BANGLEJS") {
 } else if (DEVICE=="BANGLEJS2") {
   var OUTFILE = path.join(ROOTDIR, '../Espruino/libs/banglejs/banglejs2_storage_default.c');
   var APPS = [ // IDs of apps to install
-    "boot","launch","antonclk","setting","health",
-    "about","alarm","widlock","widbat","widbt","widid"
+    "boot","launch","antonclk","setting",
+    "about","alarm","health","widlock","widbat","widbt","widid","welcome"
   ];
 } else {
   console.log("USAGE:");
@@ -86,7 +85,6 @@ function atob(input) {
   }
 
 var AppInfo = require(ROOTDIR+"/core/js/appinfo.js");
-var appjson = JSON.parse(fs.readFileSync(APPJSON).toString());
 var appfiles = [];
 
 function fileGetter(url) {
@@ -102,7 +100,13 @@ function fileGetter(url) {
       fs.writeFileSync(url, code);
     }
   }
-  return Promise.resolve(fs.readFileSync(url).toString("binary"));
+  var blob = fs.readFileSync(url);
+  var data;
+  if (url.endsWith(".js") || url.endsWith(".json"))
+    data = blob.toString(); // allow JS/etc to be written in UTF-8
+  else
+    data = blob.toString("binary")
+  return Promise.resolve(data);
 }
 
 // If file should be evaluated, try and do it...
@@ -128,8 +132,11 @@ function evaluateFile(file) {
 }
 
 Promise.all(APPS.map(appid => {
-  var app = appjson.find(app=>app.id==appid);
-  if (app===undefined) throw new Error(`App ${appid} not found`);
+  try {
+    var app = JSON.parse(fs.readFileSync(APPDIR + "/" + appid + "/metadata.json").toString());
+  } catch (e) {
+    throw new Error(`App ${appid} not found`);
+  }
   return AppInfo.getFiles(app, {
     fileGetter : fileGetter,
     settings : SETTINGS,

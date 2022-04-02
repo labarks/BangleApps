@@ -4,7 +4,8 @@
   // initialize with default settings...
   let s = {
     'grid': false,
-    'date': false,
+    'weather': false,
+    'idle_check': true,
     'font': "Lato"
   }
 
@@ -37,19 +38,27 @@
       },
     },
     'Show Grid': {
-      value: s.grid,
-      format: () => (s.grid ? 'Yes' : 'No'),
-      onchange: () => {
-        s.grid = !s.grid
-        save()
+      value: !!s.grid,
+      format: v => v ? /*LANG*/"Yes":/*LANG*/"No",
+      onchange: v => {
+        s.grid = v;
+        save();
       },
     },
-    'Show Date': {
-      value: s.date,
-      format: () => (s.date ? 'Yes' : 'No'),
-      onchange: () => {
-        s.date = !s.date
-        save()
+    'Show Weather': {
+      value: !!s.weather,
+      format: v => v ? /*LANG*/"Yes":/*LANG*/"No",
+      onchange: v => {
+        s.weather = v;
+        save();
+      },
+    },
+    'Idle Warning': {
+      value: !!s.idle_check,
+      format: v => v ? /*LANG*/"Yes":/*LANG*/"No",
+      onchange: v => {
+        s.idle_check = v;
+        save();
       },
     }
   })
