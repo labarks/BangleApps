@@ -1,0 +1,10 @@
+{
+    "id": "clockslauncher",
+    "name": "Clocks launcher menu ",
+    "shortName":"Clocks launcher menu",
+    "icon": "clockslauncher.png",
+    "version":"1.01",
+    "type":"launch",
+    "src":"clockslauncher.app.js",
+    "files":"clockslauncher.info,clockslauncher.app.js,clockslauncher.png,clocks.info,clocks.app.js,clocks.img"
+  }

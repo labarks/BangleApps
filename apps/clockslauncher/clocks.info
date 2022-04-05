@@ -1,0 +1,11 @@
+{
+    "id":"clocks",
+    "name":"Clocks menu",
+    "shortName":"Clocks",
+    "type":"app",
+    "src":"clocks.app.js",
+    "icon": "clocks.img",
+    "sortorder":0,
+    "version":"1.01",
+    "files":"clocks.info,clocks.app.js,clocks.img"
+}
