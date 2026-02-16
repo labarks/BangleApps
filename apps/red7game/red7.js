@@ -17,6 +17,9 @@ class Card {
     //this.rect = {};
     this.clippedRect = {};
   }
+  get description() {
+    return this.cardColor+" "+this.cardNum;
+  }
   get number() {
     return this.cardNum;
   }
@@ -35,19 +38,27 @@ class Card {
   get clipRect() {
     return this.clippedRect;
   }
+  fillRect(x,y,x2,y2,r) {
+    //This function allows using new rounded corners on newer firmware
+    if(process.env.VERSION === "2v12" || process.env.VERSION === "2v11" || process.env.VERSION === "2v10") {
+      g.fillRect(x,y,x2,y2);
+    } else {
+      g.fillRect({x:x,y:y,x2:x2,y2:y2,r:r});
+    }
+  }
   draw(x,y,outlined) {
     this.rect = {x1: x, x2: x+80, y1: y, y2: y+100};
     this.clippedRect = {x1: x, x2: x+24, y1: y, y2: y+100};
     var colorIndex = colors.indexOf(this.cardColor);
     var colorArr = colorsHex[colorIndex];
     var colorRule = colorsRules[colorIndex];
-    g.setColor(colorArr);
-    g.setBgColor(colorArr);
-    g.fillRect(x,y,x+80,y+100);
     if(outlined) {
       g.setColor(0,0,0);
-      g.drawRect(x,y,x+80,y+100);
+      this.fillRect(x-1,y-1,x+81,y+101,6);
     }
+    g.setColor(colorArr);
+    g.setBgColor(colorArr);
+    this.fillRect(x,y,x+80,y+100,6);
     g.setColor(255,255,255);
     g.setFont("Vector:40");
     g.setFontAlign(0,0,0);
@@ -61,21 +72,23 @@ class Card {
   drawBack(x,y,flipped) {
     this.rect = {x1: x, x2: x+80, y1: y, y2: y-100};
     this.clippedRect = {x1: x, x2: x+24, y1: y, y2: y-100};
-    g.setColor(255,255,255);
     g.setBgColor(0,0,0);
     if(flipped) {
-      g.fillRect(x,y,x+80,-100);
       g.setColor(0,0,0);
-      g.drawRect(x,y,x+80,-100);
+      this.fillRect(x-1,y+1,x+81,y-101,6);
+      g.setColor(255,255,255);
+      this.fillRect(x,y,x+80,y-100,6);
       g.setFontAlign(0,0,2);
       g.setColor(255,0,0);
       g.setBgColor(255,255,255);
       g.setFont("Vector:40");
       //g.drawString(7,x+40,y-40,true);
     } else {
-      g.fillRect(x,y,x+80,y+100);
       g.setColor(0,0,0);
-      g.drawRect(x,y,x+80,y+100);
+      this.fillRect(x-1,y-1,x+81,y+101,6);
+      g.setColor(255,255,255);
+      this.fillRect(x,y,x+80,y+100,6);
+      g.setColor(0,0,0);
       g.setFontAlign(0,0,0);
       g.setColor(255,0,0);
       g.setBgColor(255,255,255);
@@ -91,7 +104,7 @@ class Card {
     var colorRule = colorsRules[colorIndex];
     g.setColor(colorArr);
     g.setBgColor(colorArr);
-    g.fillRect(x,y,x+110,y+45);
+    this.fillRect(x,y,x+110,y+45,6);
     g.setColor(255,255,255);
     g.setFontAlign(0,0,0);
     g.setFont("6x8:2");
@@ -104,7 +117,7 @@ class Card {
     var colorArr = colorsHex[colorIndex];
     g.setColor(colorArr);
     g.setBgColor(colorArr);
-    g.fillRect(x,y,x+20,y+20);
+    this.fillRect(x,y,x+20,y+20,2);
     g.setFontAlign(0,0,0);
     g.setFont("6x8:2");
     g.setColor(255,255,255);
@@ -473,8 +486,7 @@ function canPlay(hand, palette, otherPalette) {
       } else {
         //Check if any palette play can win with rule.
         for(let h of hand.handCards) {
-          if(h === c) {}
-          else {
+          if(h !== c) {
             clonePalette.addCard(c);
             if(isWinningCombo(c, clonePalette, otherPalette)) {
               return true;
@@ -504,7 +516,7 @@ class AI {
         //Play card that wins
         this.palette.addCard(c);
         this.hand.removeCard(c);
-        return true;
+        return { winning: true, paletteAdded: c };
       }
       clonePalette.removeCard(c);
     }
@@ -514,26 +526,25 @@ class AI {
         //Play rule card that wins
         ruleStack.addCard(c);
         this.hand.removeCard(c);
-        return true;
+        return { winning: true, ruleAdded: c };
       } else {
         //Check if any palette play can win with rule.
         for(let h of this.hand.handCards) {
-          if(h === c) {}
-          else {
-            clonePalette.addCard(c);
+          if(h !== c) {
+            clonePalette.addCard(h);
             if(isWinningCombo(c, clonePalette, otherPalette)) {
               ruleStack.addCard(c);
               this.hand.removeCard(c);
               this.palette.addCard(h);
               this.hand.removeCard(h);
-              return true;
+              return { winning: true, ruleAdded: c, paletteAdded: h };
             }
-            clonePalette.removeCard(c);
+            clonePalette.removeCard(h);
           }
         }
       }
     }
-    return false;
+    return { winning: false };
   }
 }
 
@@ -543,7 +554,7 @@ function shuffleDeck(deckArray) {
 }
 
 var deck = [];
-var screen = 1;
+//var screen = 1;
 var startedGame = false;
 var playerHand = new Hand();
 var playerPalette = new Hand();
@@ -608,10 +619,10 @@ function drawScreen1() {
   Bangle.on('swipe', function(direction){
     if(direction === -1) {
       drawScreen2();
-      screen = 2;
+      //screen = 2;
     } else if(direction === 1) {
       drawScreen1();
-      screen = 1;
+      //screen = 1;
     }
   });
   g.setBgColor(0,0,0);
@@ -703,8 +714,8 @@ function drawScreenHelp() {
 }
 
 function drawGameOver(win) {
+  startedGame = false;
   E.showAlert(win ? "AI has given up. You Win!" : "You cannot play. AI wins.").then(function(){
-    startedGame = false;
     undoStack = [];
     drawMainMenu();
   });
@@ -716,18 +727,20 @@ function finishTurn() {
   if(AIhand.handCards.length === 0) {
     drawGameOver(true);
   } else {
-    var takenTurn = aiPlayer.takeTurn(ruleCards, playerPalette);
-    //Check if game over conditions met.
-    if(!takenTurn) {
-      drawGameOver(true);
-    } else if(playerHand.handCards.length === 0) {
-      drawGameOver(false);
-    } else if(!canPlay(playerHand, playerPalette, AIPalette)) {
-      drawGameOver(false);
-    } else {
-      E.showMenu();
-      drawScreen1();
-    }
+    var aiResult = aiPlayer.takeTurn(ruleCards, playerPalette);
+    E.showPrompt("AI played: " + ("paletteAdded" in aiResult ? aiResult["paletteAdded"].description+" to pallete. ":"") + ("ruleAdded" in aiResult ? aiResult["ruleAdded"].description+" to rules.":""),{buttons: {"Ok":0}}).then(function(){
+      //Check if game over conditions met.
+      if(!aiResult["winning"]) {
+        drawGameOver(true);
+      } else if(playerHand.handCards.length === 0) {
+        drawGameOver(false);
+      } else if(!canPlay(playerHand, playerPalette, AIPalette)) {
+        drawGameOver(false);
+      } else {
+        E.showMenu();
+        drawScreen1();
+      }
+    });
   }
 }
 
@@ -804,8 +817,20 @@ function drawMainMenu() {
     }
   }
   menu["New Game"] = function() {
+    if(startedGame == true) {  
+      E.showPrompt("Discard and start new game?").then(function(v) {
+            if(v) {
+              E.showMenu();
+              resetToNewGame();  
+            } else {
+              E.showMenu();
+              drawScreen1();
+            }
+      });  
+    } else {
       E.showMenu();
       resetToNewGame();
+    }
     };
   menu["Help"] = function() {
       drawScreenHelp();
@@ -821,4 +846,3 @@ drawMainMenu();
 setWatch(function(){
   drawMainMenu(); 
 },BTN, {edge: "rising", debounce: 50, repeat: true});
-

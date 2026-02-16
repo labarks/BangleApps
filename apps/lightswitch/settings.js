@@ -6,9 +6,11 @@
   var settings = Object.assign({
     colors: "011",
     image: "default",
-    touchOn: "clock,launch",
+    touchOn: "always",
+    oversize: 20,
     dragDelay: 500,
     minValue: 0.1,
+    tapToLock: false,
     unlockSide: "",
     tapSide: "right",
     tapOn: "always",
@@ -31,7 +33,7 @@
       var w = WIDGETS.lightswitch;
       // assign changes to widget
       w = Object.assign(w, settings);
-      // redraw widgets if neccessary
+      // redraw widgets if necessary
       if (drawWidgets) Bangle.drawWidgets();
     }
   }
@@ -44,9 +46,9 @@
       // return entry for string value
       return {
         value: entry.value.indexOf(settings[key]),
-        min : 0,
-        max : entry.value.length-1,
-        wrap : true,
+        min: 0,
+        max: entry.value.length - 1,
+        wrap: true,
         format: v => entry.title ? entry.title[v] : entry.value[v],
         onchange: function(v) {
           writeSetting(key, entry.value[v], entry.drawWidgets);
@@ -57,11 +59,11 @@
       // return entry for numerical value
       return {
         value: settings[key] * entry.factor,
+        min: entry.min,
+        max: entry.max,
         step: entry.step,
+        wrap: true,
         format: v => v > 0 ? v + entry.unit : "off",
-        min : entry.min,
-        max : entry.max,
-        wrap : true,
         onchange: function(v) {
           writeSetting(key, v / entry.factor, entry.drawWidgets);
         },
@@ -96,6 +98,14 @@
       value: ["", "clock", "clock,setting.app.js", "clock,launch", "clock,setting.app.js,launch", "always"],
       drawWidgets: true
     },
+    oversize: {
+      factor: 1,
+      unit: "px",
+      min: 0,
+      max: 50,
+      step: 1,
+      drawWidgets: true
+    },
     dragDelay: {
       factor: 1,
       unit: "ms",
@@ -109,6 +119,11 @@
       min: 1,
       max: 100,
       step: 1
+    },
+    tapToLock: {
+      title: ["on", "off"],
+      value: [true, false],
+      drawWidgets: false
     },
     unlockSide: {
       title: ["off", "left", "right", "top", "bottom", "front", "back"],
@@ -132,21 +147,23 @@
 
   // show main menu
   function showMain() {
-    var mainMenu = E.showMenu({
+    E.showMenu({
       "": {
         title: "Light Switch"
       },
       "< Back": () => back(),
-      "-- Widget": 0,
+      "-- Widget": {},
       "Bulb col": getEntry("colors"),
       "Image": getEntry("image"),
-      "-- Control": 0,
+      "-- Control": {},
       "Touch": getEntry("touchOn"),
+      "Oversize": getEntry("oversize"),
       "Drag Delay": getEntry("dragDelay"),
       "Min Value": getEntry("minValue"),
-      "-- Unlock": 0,
+      "Tap to lock": getEntry("tapToLock"),
+      "-- Unlock": {},
       "TapSide": getEntry("unlockSide"),
-      "-- Flash": 0,
+      "-- Flash": {},
       "TapSide ": getEntry("tapSide"),
       "Tap": getEntry("tapOn"),
       "Timeout": getEntry("tOut"),

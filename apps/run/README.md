@@ -6,6 +6,8 @@ shows distance, time, steps, cadence, pace and more.
 To use it, start the app and press the middle button so that
 the red `STOP` in the bottom right turns to a green `RUN`.
 
+The separate **Run+** app for Bangle.js 2 provides additional features.
+
 ## Display
 
 * `DIST` - the distance travelled based on the GPS (if you have a GPS lock).
@@ -14,7 +16,8 @@ the red `STOP` in the bottom right turns to a green `RUN`.
   shown will increase, even if you are standing still.
 * `TIME` - the elapsed time for your run
 * `PACE` - the number of minutes it takes you to run a given distance, configured in settings (default 1km) **based on your run so far**
-* `HEART` - Your heart rate
+* `HEART (BPM)` - Your current heart rate
+* `Max BPM` - Your maximum heart rate reached during the run
 * `STEPS` - Steps since you started exercising
 * `CADENCE` - Steps per second based on your step rate *over the last minute*
 * `GPS` - this is green if you have a GPS lock. GPS is turned on automatically
@@ -35,7 +38,7 @@ Under `Settings` -> `App` -> `Run` you can change settings for this app.
 record GPS/HRM/etc data every time you start a run?
 * `Pace` is the distance that pace should be shown over - 1km, 1 mile, 1/2 Marathon or 1 Marathon
 * `Boxes` leads to a submenu where you can configure what is shown in each of the 6 boxes on the display.
- Available stats are "Time", "Distance", "Steps", "Heart (BPM)", "Pace (avg)", "Pace (curr)", "Speed", and "Cadence".
+ Available stats are "Time", "Distance", "Steps", "Heart (BPM)", "Max BPM", "Pace (avg)", "Pace (curr)", "Speed", and "Cadence".
  Any box set to "-" will display no information.
     * Box 1 is the top left (defaults to "Distance")
     * Box 2 is the top right (defaults to "Time")
